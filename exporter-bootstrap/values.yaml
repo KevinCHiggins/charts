@@ -14,3 +14,6 @@ kube-prometheus-stack:
     prometheusSpec:
       serviceMonitorSelectorNilUsesHelmValues: false
       podMonitorSelectorNilUsesHelmValues: false
+  prometheusOperator:
+    admissionWebhooks:
+      enabled: false
