@@ -5,8 +5,6 @@ prometheus-redis-exporter:
     redisPassword: LCSqRWVmgZ
   serviceMonitor:
     enabled: true
-    labels:
-      release: exporter-bootstrap
 kube-prometheus-stack:
   prometheus:
     service:
