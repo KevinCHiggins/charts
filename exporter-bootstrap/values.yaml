@@ -5,10 +5,6 @@ prometheus-redis-exporter:
     redisPassword: Y25Tncc8qR
   serviceMonitor:
     enabled: true
-mongodb:
-  uri: mongodb://172.17.0.19:27017
-  serviceMonitor:
-    enabled: true
 kube-prometheus-stack:
   prometheus:
     service:
