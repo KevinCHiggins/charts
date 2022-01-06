@@ -6,7 +6,7 @@ prometheus-redis-exporter:
   serviceMonitor:
     enabled: true
 mongodb:
-  uri: "mongodb://mongodb-service:27017"
+  uri: mongodb://172.17.0.19:27017
   serviceMonitor:
     enabled: true
 kube-prometheus-stack:
