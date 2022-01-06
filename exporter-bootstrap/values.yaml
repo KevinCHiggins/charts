@@ -1,8 +1,15 @@
-prometheus-redis-exporter:
+redis-exporter-1:
   redisAddress: redis://172.17.0.8:6379
   auth:
     enabled: true
     redisPassword: Y25Tncc8qR
+  serviceMonitor:
+    enabled: true
+redis-exporter-2:
+  redisAddress: redis://172.17.0.21:6389
+  auth:
+    enabled: true
+    redisPassword: jR90JeYDwM
   serviceMonitor:
     enabled: true
 kube-prometheus-stack:
