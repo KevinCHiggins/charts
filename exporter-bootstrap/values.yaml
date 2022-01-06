@@ -12,6 +12,14 @@ redis-exporter-2:
     redisPassword: jR90JeYDwM
   serviceMonitor:
     enabled: true
+prometheus-postgres-exporter:
+  config:
+    datasource:
+      host: 172.17.0.17"
+      port: "27017"
+      password: postgres
+  serviceMonitor:
+    enabled: true
 kube-prometheus-stack:
   prometheus:
     service:
