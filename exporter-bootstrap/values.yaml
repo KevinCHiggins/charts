@@ -15,7 +15,7 @@ redis-exporter-2:
 prometheus-postgres-exporter:
   config:
     datasourceSecret:
-      name: postgres-secret
+      name: postgres-secret-ns
       key: connectionString
   service:
     type: NodePort
