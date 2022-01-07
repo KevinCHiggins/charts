@@ -16,7 +16,7 @@ prometheus-postgres-exporter:
   config:
     datasource:
       host: 172.17.0.17"
-      port: "27017"
+      port: "5432"
       password: postgres
   service:
     type: NodePort
