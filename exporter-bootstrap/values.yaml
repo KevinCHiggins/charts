@@ -14,13 +14,9 @@ redis-exporter-2:
     enabled: true
 prometheus-postgres-exporter:
   config:
-    datasource:
-      host: 172.17.0.17
-      port: "5432"
-      user: postgres
-      password: postgres
-      database: ""
-      sslmode: disable
+    datasourceSecret:
+      name: postgres-secret-ns
+      key: ConnectionString
   service:
     type: NodePort
   serviceMonitor:
