@@ -16,7 +16,7 @@ prometheus-postgres-exporter:
   config:
     datasourceSecret:
       name: postgres-secret-ns
-      key: ConnectionString
+      key: connectionString
   service:
     type: NodePort
   serviceMonitor:
