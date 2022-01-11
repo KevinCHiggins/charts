@@ -17,8 +17,6 @@ prometheus-postgres-exporter:
     datasourceSecret:
       name: postgres-4-secret-ns
       key: connectionString
-  service:
-    type: NodePort
   serviceMonitor:
     enabled: true
 kube-prometheus-stack:
