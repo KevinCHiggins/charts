@@ -141,6 +141,8 @@ prometheus-postgres-exporter:
   serviceMonitor:
     enabled: true
 kube-prometheus-stack:
+  sidecar:
+    enabled: false
   grafana:
     service:
       type: NodePort
