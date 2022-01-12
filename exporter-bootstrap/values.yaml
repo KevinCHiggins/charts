@@ -116,7 +116,7 @@ sidecar:
     folder: /tmp
     reqMethod: POST
     reqUsername: admin
-    reqPassword: admin
+    reqPassword: prom-operator
     reqUrl: http://172.17.0.20:3000
 
 redis-exporter-1:
