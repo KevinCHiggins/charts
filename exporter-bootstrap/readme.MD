@@ -62,7 +62,7 @@ Prometheus admission webhooks have been disabled for ease of development, as the
 
 For simplicity, Prometheus has been set to discover **all** metrics exporters in its namespace. This avoids the need to configure labels.
 
-The Postgres exporter supports connecting to multiple instances, but only if a Secret containing connection strings in a particular format is used. Note that **newlines are forbidden** in the connection string yet it is quite easy to introduce them accidentally during conversion to base64.
+The Postgres exporter supports connecting to multiple instances, but **only** by using a Secret containing connection strings in a particular format. See code comment [here](https://github.com/prometheus-community/helm-charts/blob/main/charts/kube-prometheus-stack/values.yaml). Note that **newlines are forbidden** in the connection string yet it is quite easy to introduce them accidentally during conversion to base64.
 
 Moving dashboards is currently not supported, in order to move a folder you have to first delete the ConfigMap(dashboard) then apply it again with the right label.
 
