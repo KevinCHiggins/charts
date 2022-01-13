@@ -4,7 +4,7 @@
 
 This is a PoC for a single ArgoCD application to provide observability for a Kubernetes cluster. It is composed of Prometheus, Grafana (both provided by the kube-prometheus-stack chart), a customised version of k8s-sidecar, and custom metrics exporters. This solution will automatically pick up new metrics exporters in the mn namespace (if they have serviceMonitor.enabled) and will automatically display Grafana dashboards specified in its dashboards/kong.json file.
 
-To start the app, click ‘New App’ in ArgoCD and point it to this Git repository. Most of the components are included as subchart dependencies in the Chart.yaml file. The exception is k8s-sidecar.
+To start the app, click ‘New App’ in ArgoCD and point it to this Git repository. Most of the components are included as subchart dependencies in the Chart.yaml file. The exception is **k8s-sidecar**.
 
 This is a helper app which watches a chosen set of ConfigMaps in a Kubernetes cluster and maintains a local copy of the files specified in those ConfigMaps. It can detect updates of ConfigMaps, and we have modified it to also detect deletions.
 
@@ -64,7 +64,7 @@ For simplicity, Prometheus has been set to discover **all** metrics exporters in
 
 The Postgres exporter supports connecting to multiple instances, but only if a Secret containing connection strings in a particular format is used. Note that **newlines are forbidden** in the connection string yet it is quite easy to introduce them accidentally during conversion to base64.
 
-Moving dashboards is currently not supported, in order to move a folder you have to first delete the ConfigMap(dashboard) then apply it again with the right label
+Moving dashboards is currently not supported, in order to move a folder you have to first delete the ConfigMap(dashboard) then apply it again with the right label.
 
 ## Configuration
 
