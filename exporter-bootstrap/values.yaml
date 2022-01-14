@@ -126,6 +126,8 @@ redis-exporter-1:
     redisPassword: redis
   serviceMonitor:
     enabled: true
+  service:
+    type: NodePort
 redis-exporter-2:
   redisAddress: redis://172.17.0.12:6389
   auth:
@@ -133,6 +135,8 @@ redis-exporter-2:
     redisPassword: redis-2
   serviceMonitor:
     enabled: true
+  service:
+    type: NodePort
 prometheus-postgres-exporter:
   config:
     datasourceSecret:
@@ -140,6 +144,8 @@ prometheus-postgres-exporter:
       key: connectionString
   serviceMonitor:
     enabled: true
+  service:
+    type: NodePort
 kube-prometheus-stack:
   sidecar:
     enabled: false
