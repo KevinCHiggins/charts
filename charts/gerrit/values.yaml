@@ -25,7 +25,7 @@ storageClasses:
     # If create is set to false, an existing StorageClass with the given
     # name is expected to exist in the cluster. Setting create to true will
     # create a storage class with the parameters given below.
-    name: default
+    name: standard
     create: false
     provisioner: kubernetes.io/aws-ebs
     reclaimPolicy: Delete
@@ -93,7 +93,7 @@ ingress:
 gitGC:
   image: k8sgerrit/git-gc
 
-  schedule: 0 6,18 * * *
+  schedule: "*/15 * * * *"
 
   resources:
     requests:
@@ -120,18 +120,18 @@ gerrit:
   # The memory limit has to be higher than the configures heap-size for Java!
   resources:
     requests:
-      cpu: 1
-      memory: 5Gi
+      cpu: 200m
+      memory: 400Mi
     limits:
-      cpu: 1
-      memory: 6Gi
+      cpu: 500m
+      memory: 400Mi
 
   persistence:
-    enabled: true
+    enabled: false
     size: 10Gi
 
   livenessProbe:
-    initialDelaySeconds: 30
+    initialDelaySeconds: 90
     periodSeconds: 5
 
   readinessProbe:
@@ -143,6 +143,9 @@ gerrit:
     periodSeconds: 30
 
   gracefulStopTimeout: 90
+
+  ingress:
+    host: primary.gerrit
 
   # The general NetworkPolicy rules implemented by this chart may be too restrictive
   # for some setups, e.g. when trying to replicate to a Gerrit replica. Here
@@ -198,6 +201,50 @@ gerrit:
       enabled: false
       size: 1Gi
 
+  config:
+    gerrit: |-
+     [gerrit]
+        basePath = git
+        serverId = gerrit-1
+        canonicalWebUrl = http://primary.gerrit
+      [index]
+        type = LUCENE
+      [auth]
+        type = DEVELOPMENT_BECOME_ANY_ACCOUNT
+      [httpd]
+        listenUrl = proxy-http://*:8080/
+      [sshd]
+        listenAddress = off
+      [transfer]
+        timeout = 120 s
+      [user]
+        name = Gerrit Code Review
+        email = gerrit@example.com
+        anonymousCoward = Unnamed User
+      [cache]
+        directory = cache
+      [container]
+        user = gerrit
+        javaHome = /usr/lib/jvm/java-8-openjdk-amd64
+        javaOptions = -Djavax.net.ssl.trustStore=/var/gerrit/etc/keystore
+        javaOptions = -Xms300m
+        javaOptions = -Xmx300m
+
+    secure: |-
+      [remote "replica"]
+        username = git
+        password = secret
+
+    replication: |-
+      [gerrit]
+        autoReload = false
+        replicateOnStartup = true
+        defaultForceUpdate = true
+
+      [remote "replica"]
+        url = http://gerrit-replica-git-backend-service/git/${name}.git
+        replicationDelay = 0
+        timeout = 30
   etc:
     # Some values are expected to have a specific value for the deployment installed
     # by this chart to work. These are marked with `# FIXED`.
