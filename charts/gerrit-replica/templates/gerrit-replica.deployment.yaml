@@ -1,0 +1,360 @@
+{{- $root := . -}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-gerrit-replica-deployment
+  labels:
+    app: gerrit-replica
+    chart: {{ template "gerrit-replica.chart" . }}
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.gerritReplica.replicas | default 1 }}
+  strategy:
+    rollingUpdate:
+      maxSurge: {{ .Values.gerritReplica.maxSurge }}
+      maxUnavailable: {{ .Values.gerritReplica.maxUnavailable }}
+  selector:
+    matchLabels:
+      app: gerrit-replica
+  template:
+    metadata:
+      labels:
+        app: gerrit-replica
+        chart: {{ template "gerrit-replica.chart" . }}
+        heritage: {{ .Release.Service }}
+        release: {{ .Release.Name }}
+      annotations:
+        chartRevision: "{{ .Release.Revision }}"
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.gerritReplica.gracefulStopTimeout }}
+      securityContext:
+        fsGroup: 100
+      {{ if .Values.images.registry.ImagePullSecret.name -}}
+      imagePullSecrets:
+      - name: {{ .Values.images.registry.ImagePullSecret.name }}
+      {{- range .Values.images.additionalImagePullSecrets }}
+      - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      initContainers:
+      {{- if .Values.nfsWorkaround.enabled }}
+      - name: nfs-init
+        image: busybox
+        command:
+        - sh
+        - -c
+        args:
+        - |
+          chown -R 1000:100 /var/mnt/logs
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        volumeMounts:
+        - name: logs
+          subPathExpr: "gerrit-replica/$(POD_NAME)"
+          mountPath: "/var/mnt/logs"
+        - name: nfs-config
+          mountPath: "/etc/idmapd.conf"
+          subPath: idmapd.conf
+      {{- end }}
+      - name: site-cleanup
+        image: busybox
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 100
+        command:
+        - sh
+        - -c
+        args:
+        - |
+          # Remove directories that should be mounted rather than exist with the
+          # rest of the site
+          [ ! -L /var/gerrit/git ] && rm -rf /var/gerrit/git
+          [ ! -L /var/gerrit/logs ] && rm -rf /var/gerrit/logs
+          rm -f /var/gerrit/logs/gerrit.pid
+
+          if [ -d /var/gerrit/data ]; then
+            for link in $(find /var/gerrit/data -type l); do
+              if [[ $(readlink -f $link) == /var/mnt/data/* ]]; then
+                unlink $link
+              fi
+            done
+          fi
+        volumeMounts:
+        - name: gerrit-site
+          mountPath: "/var/gerrit"
+      # Initialize the volume containing the whole Gerrit-site with defaults
+      # Not needed, when running in test mode, since then the configured site will
+      # be initialized
+      - name: populate-gerrit-site-volume
+        image: {{ template "registry" . }}{{ .Values.gerritReplica.images.gerritInit }}:{{ .Values.images.version }}
+        imagePullPolicy: {{ .Values.images.imagePullPolicy }}
+        command:
+        - /bin/ash
+        - -ce
+        args:
+        - |
+          python3 /var/tools/gerrit-initializer \
+            -c /var/config/gerrit-init.yaml \
+            -s /var/gerrit \
+            init
+
+          # The git repositories and logs will be mounted from a volume
+          [ -L /var/gerrit/git ] || rm -rf /var/gerrit/git
+          [ -L /var/gerrit/logs ] || rm -rf /var/gerrit/logs
+          {{ if .Values.gerritReplica.service.ssh.enabled -}}
+          rm -f /var/gerrit/etc/ssh_host*key*
+          {{- end }}
+        volumeMounts:
+        - name: gerrit-site
+          mountPath: "/var/gerrit"
+        - name: gerrit-init-config
+          mountPath: "/var/config/gerrit-init.yaml"
+          subPath: gerrit-init.yaml
+        {{ if .Values.caCert -}}
+        - name: tls-ca
+          subPath: ca.crt
+          mountPath: "/var/config/ca.crt"
+        {{- end }}
+      # If configured, run initialization taking the given Gerrit configuration
+      # and persisted volumes into account.
+      - name: gerrit-init
+        image: {{ template "registry" . }}{{ .Values.gerritReplica.images.gerritInit }}:{{ .Values.images.version }}
+        imagePullPolicy: {{ .Values.images.imagePullPolicy }}
+        command:
+        - /bin/ash
+        - -ce
+        args:
+        - |
+          symlink_config_to_site(){
+            for file in /var/mnt/etc/config/* /var/mnt/etc/secret/*; do
+              ln -sf $file /var/gerrit/etc/$(basename $file)
+            done
+          }
+
+          mkdir -p /var/gerrit/etc
+          symlink_config_to_site
+
+          mkdir -p /var/gerrit/data
+          {{- range .Values.gerritReplica.additionalConfigMaps }}
+          if [ -d /var/mnt/data ]; then
+            for file in $(find /var/mnt/data/{{ .subDir }} -type f); do
+              mkdir -p /var/gerrit/data/{{ .subDir }}
+              ln -sf $file /var/gerrit/data/{{ .subDir }}/$(basename $file)
+            done
+          fi
+          {{- end }}
+
+          if [ ! -d /var/gerrit/git ]; then
+            ln -sf /var/mnt/git /var/gerrit/
+          fi
+
+          if [ ! -d /var/gerrit/logs ]; then
+            ln -sf /var/mnt/logs /var/gerrit/
+          fi
+
+          python3 /var/tools/gerrit-initializer \
+            -c /var/config/gerrit-init.yaml \
+            -s /var/gerrit \
+            validate-notedb
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        volumeMounts:
+        - name: gerrit-site
+          mountPath: "/var/gerrit"
+        - name: git-repositories
+          mountPath: "/var/mnt/git"
+        - name: logs
+          subPathExpr: "gerrit-replica/$(POD_NAME)"
+          mountPath: "/var/mnt/logs"
+        {{- if .Values.nfsWorkaround.enabled }}
+        - name: nfs-config
+          mountPath: "/etc/idmapd.conf"
+          subPath: idmapd.conf
+        {{- end }}
+        - name: gerrit-init-config
+          mountPath: "/var/config/gerrit-init.yaml"
+          subPath: gerrit-init.yaml
+        {{- if and .Values.gerritReplica.plugins.cache.enabled .Values.gerritReplica.plugins.downloaded }}
+        - name: gerrit-plugin-cache
+          mountPath: "/var/mnt/plugins"
+        {{- end }}
+        - name: gerrit-config
+          mountPath: "/var/mnt/etc/config"
+        - name: gerrit-replica-secure-config
+          mountPath: "/var/mnt/etc/secret"
+        {{- range .Values.gerritReplica.additionalConfigMaps }}
+        - name: {{ .name }}
+          mountPath: "/var/mnt/data/{{ .subDir }}"
+        {{- end }}
+      containers:
+      - name: gerrit-replica
+        image: {{ template "registry" . }}{{ .Values.gerritReplica.images.gerritReplica }}:{{ .Values.images.version }}
+        imagePullPolicy: {{ .Values.images.imagePullPolicy }}
+        lifecycle:
+          preStop:
+            exec:
+              command:
+                - "/bin/ash"
+                - "-c"
+                - "kill -2 $(pidof java) && tail --pid=$(pidof java) -f /dev/null"
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        ports:
+        - name: http
+          containerPort: 8080
+        {{ if .Values.gerritReplica.service.ssh -}}
+        - name: ssh
+          containerPort: 29418
+        {{- end }}
+        volumeMounts:
+        - name: gerrit-site
+          mountPath: "/var/gerrit"
+        - name: git-repositories
+          mountPath: "/var/mnt/git"
+        - name: logs
+          subPathExpr: "gerrit-replica/$(POD_NAME)"
+          mountPath: "/var/mnt/logs"
+        {{- if .Values.nfsWorkaround.enabled }}
+        - name: nfs-config
+          mountPath: "/etc/idmapd.conf"
+          subPath: idmapd.conf
+        {{- end }}
+        {{- if and .Values.gerritReplica.plugins.cache.enabled .Values.gerritReplica.plugins.downloaded }}
+        - name: gerrit-plugin-cache
+          mountPath: "/var/mnt/plugins"
+        {{- end }}
+        - name: gerrit-config
+          mountPath: "/var/mnt/etc/config"
+        - name: gerrit-replica-secure-config
+          mountPath: "/var/mnt/etc/secret"
+        {{- range .Values.gerritReplica.additionalConfigMaps }}
+        - name: {{ .name }}
+          mountPath: "/var/mnt/data/{{ .subDir }}"
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /config/server/healthcheck~status
+            port: http
+{{ toYaml .Values.gerritReplica.livenessProbe | indent 10 }}
+        readinessProbe:
+          httpGet:
+            path: /config/server/healthcheck~status
+            port: http
+{{ toYaml .Values.gerritReplica.readinessProbe | indent 10 }}
+        startupProbe:
+          httpGet:
+            path: /config/server/healthcheck~status
+            port: http
+{{ toYaml .Values.gerritReplica.startupProbe | indent 10 }}
+        resources:
+{{ toYaml .Values.gerritReplica.resources | indent 10 }}
+      {{ if .Values.promtailSidecar.enabled -}}
+      - name: promtail
+        image: {{ .Values.promtailSidecar.image }}:v{{ .Values.promtailSidecar.version }}
+        imagePullPolicy: {{ .Values.images.imagePullPolicy }}
+        command:
+        - sh
+        - -ec
+        args:
+        - |-
+          /usr/bin/promtail \
+            -config.file=/etc/promtail/promtail.yaml \
+            -client.url={{ .Values.promtailSidecar.loki.url }}/loki/api/v1/push \
+            -client.external-labels=instance=$HOSTNAME
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+{{ toYaml .Values.promtailSidecar.resources | indent 10 }}
+        volumeMounts:
+        - name: promtail-config
+          mountPath: /etc/promtail/promtail.yaml
+          subPath: promtail.yaml
+        - name: promtail-secret
+          mountPath: /etc/promtail/promtail.secret
+          subPath: promtail.secret
+        {{- if not .Values.promtailSidecar.tls.skipVerify }}
+        - name: tls-ca
+          mountPath: /etc/promtail/promtail.ca.crt
+          subPath: ca.crt
+        {{- end }}
+        - name: logs
+          subPathExpr: "gerrit-replica/$(POD_NAME)"
+          mountPath: "/var/gerrit/logs"
+        {{- if .Values.nfsWorkaround.enabled }}
+        - name: nfs-config
+          mountPath: "/etc/idmapd.conf"
+          subPath: idmapd.conf
+        {{- end }}
+      {{- end }}
+      volumes:
+      - name: gerrit-site
+        emptyDir: {}
+      - name: git-repositories
+        persistentVolumeClaim:
+          {{- if .Values.gitRepositoryStorage.externalPVC.use }}
+          claimName: {{ .Values.gitRepositoryStorage.externalPVC.name }}
+          {{- else }}
+          claimName: {{ .Release.Name }}-git-repositories-pvc
+          {{- end }}
+      - name: logs
+        {{ if .Values.logStorage.enabled -}}
+        persistentVolumeClaim:
+          {{- if .Values.logStorage.externalPVC.use }}
+          claimName: {{ .Values.logStorage.externalPVC.name }}
+          {{- else }}
+          claimName: {{ .Release.Name }}-log-pvc
+          {{- end }}
+        {{ else -}}
+        emptyDir: {}
+        {{- end }}
+      {{- if and .Values.gerritReplica.plugins.cache.enabled .Values.gerritReplica.plugins.downloaded }}
+      - name: gerrit-plugin-cache
+        persistentVolumeClaim:
+          claimName: {{ .Release.Name }}-plugin-cache-pvc
+      {{- end }}
+      {{- if .Values.nfsWorkaround.enabled }}
+      - name: nfs-config
+        configMap:
+          name: {{ .Release.Name }}-nfs-configmap
+      {{- end }}
+      - name: gerrit-init-config
+        configMap:
+          name: {{ .Release.Name }}-gerrit-init-configmap
+      - name: gerrit-config
+        configMap:
+          name: {{ .Release.Name }}-gerrit-replica-configmap
+      - name: gerrit-replica-secure-config
+        secret:
+          secretName: {{ .Release.Name }}-gerrit-replica-secure-config
+      {{ if .Values.caCert -}}
+      - name: tls-ca
+        secret:
+          secretName: {{ .Release.Name }}-tls-ca
+      {{- end }}
+      {{ if .Values.promtailSidecar.enabled -}}
+      - name: promtail-config
+        configMap:
+          name: {{ .Release.Name }}-promtail-gerrit-configmap
+      - name: promtail-secret
+        secret:
+          secretName: {{ .Release.Name }}-promtail-secret
+      {{- end }}
+      {{- range .Values.gerritReplica.additionalConfigMaps }}
+      - name: {{ .name }}
+        configMap:
+          name: {{ if .data }}{{ $root.Release.Name }}-{{ .name }}{{ else }}{{ .name }}{{ end }}
+      {{- end }}

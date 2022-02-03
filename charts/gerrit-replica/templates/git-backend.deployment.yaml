@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-git-backend-deployment
+  labels:
+    app: git-backend
+    chart: {{ template "gerrit-replica.chart" . }}
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.gitBackend.replicas | default 1 }}
+  strategy:
+    rollingUpdate:
+      maxSurge: {{ .Values.gitBackend.maxSurge }}
+      maxUnavailable: {{ .Values.gitBackend.maxUnavailable }}
+  selector:
+    matchLabels:
+      app: git-backend
+  template:
+    metadata:
+      labels:
+        app: git-backend
+        chart: {{ template "gerrit-replica.chart" . }}
+        heritage: {{ .Release.Service }}
+        release: {{ .Release.Name }}
+      annotations:
+        chartRevision: "{{ .Release.Revision }}"
+    spec:
+      securityContext:
+        fsGroup: 100
+      {{ if .Values.images.registry.ImagePullSecret.name -}}
+      imagePullSecrets:
+      - name: {{ .Values.images.registry.ImagePullSecret.name }}
+      {{- range .Values.images.additionalImagePullSecrets }}
+      - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      initContainers:
+      {{- if .Values.nfsWorkaround.enabled }}
+      - name: nfs-init
+        image: busybox
+        command:
+        - sh
+        - -c
+        args:
+        - |
+          chown -R 1000:100 /var/mnt/logs
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        volumeMounts:
+        - name: logs
+          subPathExpr: "gerrit-replica/$(POD_NAME)"
+          mountPath: "/var/mnt/logs"
+        - name: nfs-config
+          mountPath: "/etc/idmapd.conf"
+          subPath: idmapd.conf
+      {{- end }}
+      containers:
+      - name: apache-git-http-backend
+        imagePullPolicy: {{ .Values.images.imagePullPolicy }}
+        image: {{ template "registry" . }}{{ .Values.gitBackend.image }}:{{ .Values.images.version }}
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        ports:
+        - name: http-port
+          containerPort: 80
+        resources:
+{{ toYaml .Values.gitBackend.resources | indent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http-port
+{{ toYaml .Values.gitBackend.livenessProbe | indent 10 }}
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http-port
+{{ toYaml .Values.gitBackend.readinessProbe | indent 10 }}
+        volumeMounts:
+        - name: git-repositories
+          mountPath: "/var/gerrit/git"
+        - name: logs
+          subPathExpr: "apache-git-http-backend/$(POD_NAME)"
+          mountPath: "/var/log/apache2"
+        {{- if .Values.nfsWorkaround.enabled }}
+        - name: nfs-config
+          mountPath: "/etc/idmapd.conf"
+          subPath: idmapd.conf
+        {{- end }}
+        - name: git-backend-secret
+          readOnly: true
+          subPath: .htpasswd
+          mountPath: "/var/apache/credentials/.htpasswd"
+      volumes:
+      - name: git-repositories
+        persistentVolumeClaim:
+          {{- if .Values.gitRepositoryStorage.externalPVC.use }}
+          claimName: {{ .Values.gitRepositoryStorage.externalPVC.name }}
+          {{- else }}
+          claimName: {{ .Release.Name }}-git-repositories-pvc
+          {{- end }}
+      - name: git-backend-secret
+        secret:
+          secretName: {{ .Release.Name }}-git-backend-secret
+      - name: logs
+        {{ if .Values.logStorage.enabled -}}
+        persistentVolumeClaim:
+          {{- if .Values.logStorage.externalPVC.use }}
+          claimName: {{ .Values.logStorage.externalPVC.name }}
+          {{- else }}
+          claimName: {{ .Release.Name }}-log-pvc
+          {{- end }}
+        {{ else -}}
+        emptyDir: {}
+        {{- end }}
+      {{- if .Values.nfsWorkaround.enabled }}
+      - name: nfs-config
+        configMap:
+          name: {{ .Release.Name }}-nfs-configmap
+      {{- end }}

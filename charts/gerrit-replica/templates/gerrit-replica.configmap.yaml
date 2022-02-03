@@ -1,0 +1,70 @@
+{{- $root := . -}}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-gerrit-replica-configmap
+  labels:
+    app: gerrit-replica
+    chart: {{ template "gerrit-replica.chart" . }}
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
+data:
+  {{- range $key, $value := .Values.gerritReplica.etc.config }}
+  {{ $key }}:
+{{ toYaml $value | indent 4 }}
+  {{- end }}
+  {{- if not (hasKey .Values.gerritReplica.etc.config "healthcheck.config") }}
+  healthcheck.config: |-
+    [healthcheck "auth"]
+      # On new instances there may be no users to use for healthchecks
+      enabled = false
+    [healthcheck "querychanges"]
+      # On new instances there won't be any changes to query
+      enabled = false
+  {{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-gerrit-init-configmap
+  labels:
+    app: gerrit-replica
+    chart: {{ template "gerrit-replica.chart" . }}
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
+data:
+  gerrit-init.yaml: |-
+    {{ if .Values.caCert -}}
+    caCertPath: /var/config/ca.crt
+    {{- end }}
+    pluginCache: {{ .Values.gerritReplica.plugins.cache.enabled }}
+    pluginCacheDir: /var/mnt/plugins
+    {{- if .Values.gerritReplica.plugins.packaged }}
+    packagedPlugins:
+{{ toYaml .Values.gerritReplica.plugins.packaged | indent 6}}
+    {{- end }}
+    {{- if .Values.gerritReplica.plugins.downloaded }}
+    downloadedPlugins:
+{{ toYaml .Values.gerritReplica.plugins.downloaded | indent 6 }}
+    {{- end }}
+    {{- if .Values.gerritReplica.plugins.installAsLibrary }}
+    installAsLibrary:
+{{ toYaml .Values.gerritReplica.plugins.installAsLibrary | indent 6 }}
+    {{- end }}
+{{- range .Values.gerritReplica.additionalConfigMaps -}}
+{{- if .data }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name:  {{ $root.Release.Name }}-{{ .name }}
+  labels:
+    app: gerrit-replica
+    chart: {{ template "gerrit-replica.chart" $root }}
+    heritage: {{ $root.Release.Service }}
+    release: {{ $root.Release.Name }}
+data:
+{{ toYaml .data | indent 2 }}
+{{- end }}
+{{- end }}

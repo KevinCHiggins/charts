@@ -1,0 +1,105 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name:  {{ .Release.Name }}-git-gc
+  labels:
+    app: git-gc
+    chart: {{ template "gerrit-replica.chart" . }}
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
+spec:
+  schedule: {{ .Values.gitGC.schedule | quote }}
+  concurrencyPolicy: "Forbid"
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          {{ if .Values.istio.enabled -}}
+          annotations:
+            sidecar.istio.io/inject: "false"
+          {{- end }}
+          labels:
+            app: git-gc
+            chart: {{ template "gerrit-replica.chart" . }}
+            heritage: {{ .Release.Service }}
+            release: {{ .Release.Name }}
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            fsGroup: 100
+          {{ if .Values.images.registry.ImagePullSecret.name -}}
+          imagePullSecrets:
+          - name: {{ .Values.images.registry.ImagePullSecret.name }}
+          {{- range .Values.images.additionalImagePullSecrets }}
+          - name: {{ . }}
+          {{- end }}
+          {{- end }}
+          initContainers:
+          {{- if .Values.nfsWorkaround.enabled }}
+          - name: nfs-init
+            image: busybox
+            command:
+            - sh
+            - -c
+            args:
+            - |
+              chown -R 1000:100 /var/mnt/logs
+            env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            volumeMounts:
+            - name: logs
+              subPathExpr: "git-gc/$(POD_NAME)"
+              mountPath: "/var/mnt/logs"
+            - name: nfs-config
+              mountPath: "/etc/idmapd.conf"
+              subPath: idmapd.conf
+          {{- end }}
+          containers:
+          - name: git-gc
+            imagePullPolicy: {{ .Values.images.imagePullPolicy }}
+            image: {{ template "registry" . }}{{ .Values.gitGC.image }}:{{ .Values.images.version }}
+            resources:
+{{ toYaml .Values.gitGC.resources | indent 14 }}
+            env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            volumeMounts:
+            - name: git-repositories
+              mountPath: "/var/gerrit/git"
+            - name: logs
+              subPathExpr: "git-gc/$(POD_NAME)"
+              mountPath: "/var/log/git"
+            {{- if .Values.nfsWorkaround.enabled }}
+            - name: nfs-config
+              mountPath: "/etc/idmapd.conf"
+              subPath: idmapd.conf
+            {{- end }}
+          volumes:
+          - name: git-repositories
+            persistentVolumeClaim:
+              {{- if .Values.gitRepositoryStorage.externalPVC.use }}
+              claimName: {{ .Values.gitRepositoryStorage.externalPVC.name }}
+              {{- else }}
+              claimName: {{ .Release.Name }}-git-repositories-pvc
+              {{- end }}
+          - name: logs
+            {{ if .Values.logStorage.enabled -}}
+            persistentVolumeClaim:
+              {{- if .Values.logStorage.externalPVC.use }}
+              claimName: {{ .Values.logStorage.externalPVC.name }}
+              {{- else }}
+              claimName: {{ .Release.Name }}-log-pvc
+              {{- end }}
+            {{ else -}}
+            emptyDir: {}
+            {{- end }}
+          {{- if .Values.nfsWorkaround.enabled }}
+          - name: nfs-config
+            configMap:
+              name: {{ .Release.Name }}-nfs-configmap
+          {{- end }}

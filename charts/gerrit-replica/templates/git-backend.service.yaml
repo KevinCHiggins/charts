@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-git-backend-service
+  labels:
+    app: git-backend
+    chart: {{ template "gerrit-replica.chart" . }}
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
+spec:
+  {{ with .Values.gitBackend.service }}
+  ports:
+  - name: http
+    port: {{ .http.port }}
+    targetPort: 80
+  selector:
+    app: git-backend
+  type: {{ .type }}
+  {{- end }}
