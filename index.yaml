@@ -113,4 +113,61 @@ entries:
     urls:
     - https://github.com/KevinCHiggins/charts/releases/download/exporter-bootstrap-1.0.0/exporter-bootstrap-1.0.0.tgz
     version: 1.0.0
-generated: "2022-01-04T16:45:19.161878628Z"
+  gerrit:
+  - apiVersion: v2
+    appVersion: 3.3.1
+    created: "2022-02-03T12:36:51.39071011Z"
+    description: Gerrit is a free, web-based team code collaboration tool. Software
+      developers in a team can review each other's modifications on their source code
+      using a Web browser and approve or reject those changes. It integrates closely
+      with Git, a distributed version control system. [1]  [1](https://en.wikipedia.org/wiki/Gerrit_(software)
+    digest: 72b041e8e10c3ada9c8bcdb5e148233ee1f9fabdeb2cc64bdf10df3e907a0eb0
+    home: https://gerrit.googlesource.com/k8s-gerrit/+/master/helm-charts/gerrit-replica
+    icon: http://commondatastorage.googleapis.com/gerrit-static/diffy-w200.png
+    keywords:
+    - gerrit
+    - git
+    maintainers:
+    - email: thomas.draebing@sap.com
+      name: Thomas Draebing
+    - email: matthias.sohn@sap.com
+      name: Matthias Sohn
+    - email: sasa.zivkov@sap.com
+      name: Sasa Zivkov
+    - email: christian.halstrick@sap.com
+      name: Christian Halstrick
+    name: gerrit
+    sources:
+    - https://gerrit.googlesource.com/k8s-gerrit/+/master/
+    urls:
+    - https://github.com/KevinCHiggins/charts/releases/download/gerrit-0.2.0/gerrit-0.2.0.tgz
+    version: 0.2.0
+  gerrit-replica:
+  - apiVersion: v2
+    appVersion: 3.3.1
+    created: "2022-02-03T12:36:51.506416207Z"
+    description: The Gerrit replica serves as a read-only Gerrit instance to serve
+      repositories that it receives from a Gerrit instance via replication. It can
+      be used to reduce the load on Gerrit instances.
+    digest: 16a31dc5b9b9d1d682b4eb89ad1904e6527478192b59522585070c8ef2b490cf
+    home: https://gerrit.googlesource.com/k8s-gerrit/+/master/helm-charts/gerrit-replica
+    icon: http://commondatastorage.googleapis.com/gerrit-static/diffy-w200.png
+    keywords:
+    - gerrit
+    - git
+    maintainers:
+    - email: thomas.draebing@sap.com
+      name: Thomas Draebing
+    - email: matthias.sohn@sap.com
+      name: Matthias Sohn
+    - email: sasa.zivkov@sap.com
+      name: Sasa Zivkov
+    - email: christian.halstrick@sap.com
+      name: Christian Halstrick
+    name: gerrit-replica
+    sources:
+    - https://gerrit.googlesource.com/k8s-gerrit/+/master
+    urls:
+    - https://github.com/KevinCHiggins/charts/releases/download/gerrit-replica-0.2.0/gerrit-replica-0.2.0.tgz
+    version: 0.2.0
+generated: "2022-02-03T12:36:51.506454408Z"
